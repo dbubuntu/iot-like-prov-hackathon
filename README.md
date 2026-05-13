@@ -6,6 +6,8 @@ A demonstration of smart device out-of-box provisioning — the moment a new IoT
 
 ## Architecture
 
+> Detailed Mermaid diagram: [docs/architecture-components.md](docs/architecture-components.md)
+
 Three components interact to complete the enrollment:
 
 ```
@@ -42,6 +44,8 @@ Three components interact to complete the enrollment:
 The App (`app/serve.py`) proxies all traffic through an HTTPS server on port **9443**, mapping `/server/*` → `:5000` and `/device/*` → `:5001` to avoid CORS issues and enable mobile camera access.
 
 ## Workflow
+
+> Detailed Mermaid diagram: [docs/architecture-workflow.md](docs/architecture-workflow.md)
 
 When a user unboxes a new IoT device, they open the companion mobile app and tap **Start Provisioning**. This triggers the device to contact a central provisioning server and obtain a unique enrollment token. The device displays this token as a scannable QR code. The user points their phone at the QR — the app reads it and forwards the approval to the server. The server validates the match and confirms the device's identity. The device receives the confirmation, stores its credentials locally, and transitions to **ONLINE**. The entire process takes under a minute with zero manual configuration.
 

@@ -44,3 +44,9 @@ app/key.pem
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Large media
+media/*.mov
+
+# Large media
+media/*.mov
