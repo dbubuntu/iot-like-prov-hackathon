@@ -1,6 +1,6 @@
 # IoT Provisioning Demo (Enrollment-Only Flow)
 
-A demonstration of smart device out-of-box provisioning — the moment a new IoT-like device arrives, establishes trust, and gets onboarded. The initial scope focuses on the enrollment process: the device already has network connectivity and all components (device, server, and mobile app) share full visibility of each other. 
+A demonstration of smart device out-of-box provisioning — the moment a new IoT-like device arrives, establishes trust, and gets onboarded. The initial scope focuses on the enrollment process. The device requests a token to the server and shows a QR code on the terminal based on the received token. The user approves the request scanning the QR code with the mobile. The device already has network connectivity and all components (device, server, and mobile app) share full visibility of each other.
 
 *Note: No Bluetooth pairing or WiFi setup is involved in this iteration. This will be part of future work.*
 
