@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Provisioning App</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f5f5f5;
+  color: #222;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 20px;
+}
+.container {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  padding: 24px;
+}
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  text-align: center;
+}
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 4px;
+}
+input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 14px;
+  transition: border-color 0.2s;
+}
+input:focus {
+  outline: none;
+  border-color: #4a90d9;
+}
+.btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-start {
+  background: #4a90d9;
+  color: #fff;
+}
+.btn-start:hover:not(:disabled) {
+  background: #3a7bc8;
+}
+.status {
+  text-align: center;
+  font-size: 13px;
+  color: #666;
+  margin: 10px 0;
+  min-height: 20px;
+}
+#reader {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 16px;
+  position: relative;
+}
+#reader video {
+  border-radius: 8px;
+}
+#reader-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+  margin-top: 8px;
+}
+#manualSection {
+  display: none;
+  margin-top: 16px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+}
+#manualSection label {
+  margin-bottom: 6px;
+}
+#manualSection input {
+  margin-bottom: 10px;
+}
+.btn-manual {
+  background: #6c757d;
+  color: #fff;
+  font-size: 13px;
+  padding: 8px 14px;
+  width: auto;
+  display: inline-block;
+}
+.alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 16px;
+  text-align: center;
+}
+.alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.alert-error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>IoT Provisioning</h1>
+
+  <label for="serverUrl">Server URL</label>
+  <input type="text" id="serverUrl" value="/server" onchange="saveUrls()" oninput="saveUrls()">
+
+  <label for="deviceUrl">Device URL</label>
+  <input type="text" id="deviceUrl" value="/device" onchange="saveUrls()" oninput="saveUrls()">
+
+  <button class="btn btn-start" id="startBtn" onclick="startProvisioning()">Start Provisioning</button>
+  <div class="status" id="status"></div>
+  <div id="reader"></div>
+  <div id="reader-hint"></div>
+  <div id="manualSection">
+    <label for="manualToken">Or enter token manually:</label>
+    <input type="text" id="manualToken" placeholder="e.g. 123456">
+    <button class="btn btn-manual" onclick="submitManual()">Submit Token</button>
+  </div>
+  <div id="alert"></div>
+</div>
+
+<script>
+var scanner = null;
+
+(function() {
+  var s = localStorage.getItem('serverUrl');
+  if (s) document.getElementById('serverUrl').value = s;
+  var d = localStorage.getItem('deviceUrl');
+  if (d) document.getElementById('deviceUrl').value = d;
+})();
+
+function saveUrls() {
+  localStorage.setItem('serverUrl', document.getElementById('serverUrl').value);
+  localStorage.setItem('deviceUrl', document.getElementById('deviceUrl').value);
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+function showAlert(msg, type) {
+  var el = document.getElementById('alert');
+  el.textContent = msg;
+  el.className = 'alert alert-' + type;
+}
+
+function clearAlert() {
+  var el = document.getElementById('alert');
+  el.textContent = '';
+  el.className = '';
+}
+
+async function startProvisioning() {
+  var deviceUrl = document.getElementById('deviceUrl').value.trim();
+  var btn = document.getElementById('startBtn');
+  clearAlert();
+  btn.disabled = true;
+  setStatus('Starting provisioning…');
+
+  try {
+    var resp = await fetch(deviceUrl + '/start', { method: 'POST' });
+    var body = await resp.text();
+    if (!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + body);
+    setStatus('Device started. Scanning for QR code…');
+    startScanner();
+  } catch (e) {
+    setStatus('');
+    var detail = e.message;
+    if (detail === 'Failed to fetch') {
+      detail += ' — Is the Device running on port 5001? Check serve.py terminal for proxy logs.';
+    }
+    showAlert('Failed to start device: ' + detail, 'error');
+    btn.disabled = false;
+  }
+}
+
+function startScanner() {
+  var el = document.getElementById('reader');
+  el.style.display = 'block';
+  document.getElementById('reader-hint').textContent =
+    'Point camera at the terminal QR code. Hold still — scanning is automatic.';
+  document.getElementById('manualSection').style.display = 'block';
+
+  scanner = new Html5Qrcode('reader');
+
+  scanner.start(
+    { facingMode: 'environment' },
+    {
+      fps: 5,
+      qrbox: function(vw, vh) {
+        return { width: vw, height: vh };
+      },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    },
+    function(text) { onScan(text); },
+    function() {}
+  ).catch(function(err) {
+    setStatus('');
+    var msg = err && err.message ? err.message : String(err || 'Camera unavailable');
+    var hint = '';
+    if (msg.indexOf('NotAllowed') !== -1 || msg.indexOf('Permission') !== -1) {
+      hint = ' — Camera permission denied. Please allow camera access.';
+    } else if (msg.indexOf('NotFound') !== -1 || msg.indexOf('No video') !== -1) {
+      hint = ' — No camera found on this device.';
+    } else if (msg.indexOf('NotReadable') !== -1 || msg.indexOf('in use') !== -1) {
+      hint = ' — Camera is already in use.';
+    } else if (msg.indexOf('HTTPS') !== -1 || msg.indexOf('secure origin') !== -1) {
+      hint = ' — Camera requires HTTPS or localhost.';
+    }
+    showAlert('Camera error: ' + msg + hint, 'error');
+    document.getElementById('startBtn').disabled = false;
+  });
+}
+
+function submitManual() {
+  var token = document.getElementById('manualToken').value.trim();
+  if (!token) return;
+  stopScanner();
+  approveToken(token, 'IOT-DEV-0001');
+}
+
+function stopScanner() {
+  if (scanner) {
+    scanner.stop().catch(function(){});
+    scanner = null;
+  }
+  document.getElementById('reader').style.display = 'none';
+  document.getElementById('reader-hint').textContent = '';
+  document.getElementById('manualSection').style.display = 'none';
+}
+
+async function onScan(text) {
+  stopScanner();
+  setStatus('QR scanned. Approving…');
+
+  var token, deviceId;
+
+  try {
+    var json = JSON.parse(text);
+    token = json.token;
+    deviceId = json.device_id || 'IOT-DEV-0001';
+  } catch (e) {
+    if (text.indexOf('|') !== -1) {
+      var parts = text.split('|');
+      token = parts[0];
+      deviceId = parts[1] || 'IOT-DEV-0001';
+    } else {
+      token = text;
+      deviceId = 'IOT-DEV-0001';
+    }
+  }
+
+  approveToken(token, deviceId);
+}
+
+async function approveToken(token, deviceId) {
+  var serverUrl = document.getElementById('serverUrl').value.trim();
+
+  try {
+    var resp = await fetch(serverUrl + '/v1/app/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, device_id: deviceId }),
+    });
+    var body = await resp.text();
+    if (!resp.ok) {
+      throw new Error('HTTP ' + resp.status + ': ' + body);
+    }
+    setStatus('');
+    showAlert('Approval successful — device is now ONLINE.', 'success');
+  } catch (e) {
+    setStatus('');
+    var detail = e.message;
+    if (detail === 'Failed to fetch') {
+      detail += ' — Is the Server running on port 5000? Check serve.py terminal for proxy logs.';
+    }
+    showAlert('Approval failed: ' + detail, 'error');
+  }
+
+  document.getElementById('startBtn').disabled = false;
+}
+</script>
+</body>
+</html>

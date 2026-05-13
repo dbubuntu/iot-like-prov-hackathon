@@ -1,0 +1,6 @@
+rich>=13.0.0
+flask>=3.0.0
+flask-cors>=4.0.0
+qrcode>=7.4.0
+requests>=2.28.0
+pillow>=10.0.0
