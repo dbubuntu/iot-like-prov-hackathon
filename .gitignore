@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+.eggs/
+venv/
+.venv/
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Mobile
+.gradle/
+build/
+*.apk
+*.ipa
+
+# LXD / system artifacts
+*.log
+/tmp/
+/var/log/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.*
+*.local
+
+# Provisioning artifacts
+provisioned.json
+
+# OS artifacts
+.DS_Store
+Thumbs.db
