@@ -1,32 +1,71 @@
 # IoT Provisioning Demo (Enrollment-Only Flow)
 
-A simplified demonstration of IoT device enrollment. All components run on localhost with direct REST communication — no BLE, no WiFi passthrough, no LXD VM.
+A demonstration of smart device out-of-box provisioning — the moment a new IoT-like device arrives, establishes trust, and gets onboarded. The initial scope focuses on the enrollment process: the device already has network connectivity and all components (device, server, and mobile app) share full visibility of each other. 
+
+*Note: No Bluetooth pairing or WiFi setup is involved in this iteration. This will be part of future work.*
 
 ## Architecture
 
+Three components interact to complete the enrollment:
+
 ```
-┌──────────┐  POST /start      ┌──────────┐
-│   APP    │ ─────────────────▶│  DEVICE   │
-│ (browser)│                   │ :5001     │
-│ HTTPS    │                   │ Flask TUI │
-│ :9443    │                   │           │
-└────┬─────┘                   └────┬─────┘
-     │                              │
-     │ POST /v1/app/approve         │ GET /v1/device/token?id=X
-     │                              │ GET /v1/device/status/X
-     │              ┌──────────┐    │
-     │      /server │  SERVER  │◀───┘
-     └─────────────▶│ :5000    │
-                    │ FastAPI  │
-                    └──────────┘
+                ┌──────────────────────┐
+                │        SERVER        │
+                │   Provisioning API   │
+                │       :5000          │
+                │                      │
+                │  Issues tokens       │
+                │  Validates approvals │
+                └──┬──────────────┬───┘
+                   │              │
+      token/status │              │ approve
+                   │              │
+       ┌───────────▼──┐      ┌───┴──────────┐
+       │    DEVICE    │      │     APP       │
+       │  IoT Client  │◀─────│  Mobile UI    │
+       │    :5001     │start │    :9443      │
+       │              │      │               │
+       │  Rich TUI    │      │  Scan QR      │
+       │  QR display  │      │  Approve      │
+       │  State mgmt  │      │               │
+       └──────────────┘      └───────────────┘
 ```
 
-The **App** (`app/serve.py`) runs an HTTPS server on port **9443** that:
-- Serves `app/index.html`
-- Proxies `/server/*` → `http://localhost:5000/*` (Server API)
-- Proxies `/device/*` → `http://localhost:5001/*` (Device API)
+### Components
 
-This avoids CORS issues and allows mobile browser camera access (requires HTTPS).
+**SERVER** — The provisioning authority. It issues short-lived enrollment tokens to devices, tracks approval state, and validates scan confirmations from the app. Acts as the trust anchor between device and app.
+
+**DEVICE** — The IoT device being provisioned. It exposes a REST endpoint for the app to trigger enrollment, contacts the server to obtain a token, renders it as a QR code in a terminal-based TUI, and polls the server until approval is granted.
+
+**APP** — The user's mobile companion. It runs in a browser, sends the start command to the device, scans the QR code using the phone's camera, and forwards the scanned token to the server for final approval.
+
+The App (`app/serve.py`) proxies all traffic through an HTTPS server on port **9443**, mapping `/server/*` → `:5000` and `/device/*` → `:5001` to avoid CORS issues and enable mobile camera access.
+
+## Workflow
+
+When a user unboxes a new IoT device, they open the companion mobile app and tap **Start Provisioning**. This triggers the device to contact a central provisioning server and obtain a unique enrollment token. The device displays this token as a scannable QR code. The user points their phone at the QR — the app reads it and forwards the approval to the server. The server validates the match and confirms the device's identity. The device receives the confirmation, stores its credentials locally, and transitions to **ONLINE**. The entire process takes under a minute with zero manual configuration.
+
+```
+     APP (Browser)            DEVICE (Flask)          SERVER (FastAPI)
+     :9443                    :5001                   :5000
+        │                         │                       │
+        │──①  POST /start────────▶│                       │
+        │                         │──②  GET /token────────▶│
+        │                         │◀─────────token─────────│
+        │                         │                       │
+        │                         │──③  GET /status───────▶│  (poll every 2s)
+        │                         │◀──────{approved}───────│
+        │                         │                       │
+        │                      [QR shown]                │
+        │◀──scan QR──────────────│                       │
+        │                         │                       │
+        │──────④  POST /approve──────────────────────────▶│
+        │◀─────────{ok}───────────────────────────────────│
+        │                         │──③  GET /status───────▶│
+        │                         │◀────approved: true─────│
+        │                         │                       │
+        │                      [ONLINE]                  │
+```
 
 ## Quick Start
 
